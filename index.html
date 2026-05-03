@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>IHP Lab Equipment Dashboard — Live Loader</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#0B1F3A;--steel:#1D4F8A;--sky:#3B82C4;--ice:#C8DFF5;--ice-l:#E8F2FC;--gold:#C8973A;--gold-l:#F0D898;--teal:#0D9488;--text:#0E1E35;--muted:#6B8099;--bg:#F0F5FC;--card:#fff;--gc:rgba(11,31,58,.06)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);line-height:1.65;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;background-image:linear-gradient(var(--gc) 1px,transparent 1px),linear-gradient(90deg,var(--gc) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
+
+/* ── DROP ZONE ── */
+#drop-screen{position:fixed;inset:0;z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--navy);transition:background .3s}
+#drop-screen.drag-over{background:#0d2a4a}
+.drop-box{border:2px dashed rgba(200,151,58,.5);border-radius:20px;padding:60px 80px;text-align:center;cursor:pointer;transition:border-color .2s,transform .2s;max-width:520px;width:90%}
+.drop-box:hover{border-color:var(--gold);transform:scale(1.01)}
+.drop-icon{font-size:64px;margin-bottom:24px;display:block;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.drop-title{font-family:'Inter',sans-serif;font-size:28px;font-weight:800;color:#fff;margin-bottom:12px}
+.drop-sub{color:rgba(200,223,245,.65);font-size:15px;font-weight:300;margin-bottom:28px}
+.drop-btn{display:inline-block;background:var(--gold);color:var(--navy);font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:12px 28px;border-radius:8px;cursor:pointer;border:none;transition:background .15s,transform .1s}
+.drop-btn:hover{background:var(--gold-l);transform:translateY(-1px)}
+.drop-hint{margin-top:20px;font-family:'DM Mono',monospace;font-size:11px;color:rgba(200,223,245,.4);letter-spacing:.08em}
+.drop-error{color:#f87171;font-size:13px;margin-top:16px;min-height:20px}
+#file-input{display:none}
+.drop-reload{position:fixed;top:16px;right:16px;z-index:1000;background:var(--gold);color:var(--navy);border:none;border-radius:8px;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:none;box-shadow:0 2px 8px rgba(0,0,0,.2);transition:background .15s}
+.drop-reload:hover{background:var(--gold-l)}
+.drop-pdf{position:fixed;top:52px;right:16px;z-index:1000;background:var(--navy);color:#fff;border:1px solid rgba(200,151,58,0.5);border-radius:8px;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:none;box-shadow:0 2px 8px rgba(0,0,0,.2);transition:background .15s}
+.drop-pdf:hover{background:var(--steel)}
+@page{size:A4 portrait;margin:8mm}
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  @page{size:A4 portrait;margin:8mm}
+  #drop-screen,#reload-btn,.drop-pdf,.tab-bar,button{display:none!important}
+  #dashboard{display:block!important}
+  .tab-panel{display:block!important}
+  body::before{display:none}
+  body{background:#fff;font-size:11px}
+  .hero{background:var(--navy)!important}
+  .pw{padding:0 8px 12px;max-width:100%}
+  .hero-inner{padding:16px 12px 28px}
+  .hero h1{font-size:20px!important}
+  .hero-meta{font-size:10px;gap:12px;flex-wrap:wrap}
+  .hero-meta b{font-size:13px}
+  .kg{grid-template-columns:repeat(4,1fr)!important;gap:8px}
+  .kc{padding:12px}
+  .kv{font-size:18px!important}
+  .cg{grid-template-columns:1fr 1fr!important;gap:12px}
+  .fg{grid-template-columns:1fr 1fr!important;gap:10px}
+  .kc,.cc,.de-chart-box,.fc{break-inside:avoid}
+  .cc.wide{grid-column:1/-1}
+  .cc{padding:14px}
+  canvas{max-width:100%!important;height:auto!important}
+  .ch{height:160px!important}
+  .ch[style*="280px"]{height:200px!important}
+  .ch[style*="340px"]{height:220px!important}
+  .ch[style*="240px"]{height:180px!important}
+  .ch[style*="220px"]{height:160px!important}
+  section{margin-top:20px}
+  .sl{font-size:9px}
+  .st{font-size:16px!important}
+  .sr{margin-bottom:12px}
+  /* Tables — shrink to fit portrait width */
+  .tw{overflow-x:visible!important}
+  table{width:100%!important;font-size:8.5px!important;table-layout:fixed}
+  thead th{padding:6px 4px!important;font-size:8px!important;white-space:normal!important;word-break:break-word}
+  td{padding:5px 4px!important;font-size:8.5px!important;white-space:normal!important;word-break:break-word}
+  .de-tc table{font-size:7.5px!important;table-layout:fixed}
+  .de-tc thead th{font-size:7px!important;padding:5px 3px!important}
+  .de-tc td{font-size:7.5px!important;padding:4px 3px!important}
+  .print-section-break{display:block!important;break-before:page;margin-top:0;padding-top:12px}
+  .print-tab-label{display:block!important;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--sky);margin-bottom:10px;padding:4px 10px;background:var(--ice-l);border-radius:4px;width:fit-content}
+  .de-toolbar,.de-pager,.de-pb{display:none!important}
+  .de-charts{grid-template-columns:1fr 1fr!important;gap:10px}
+  .de-chart-box{padding:12px}
+  .spr{gap:8px}
+  .spc{padding:8px 10px;min-width:100px}
+  footer{margin-top:16px}
+}
+
+/* ── MAIN DASHBOARD (hidden until data loaded) ── */
+#dashboard{display:none}
+.pw{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 32px 80px}
+.hero{background:var(--navy);position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:60px;background:var(--bg);clip-path:polygon(0 100%,100% 100%,100% 0)}
+.hero-inner{max-width:1200px;margin:0 auto;padding:48px 32px 72px;display:flex;flex-direction:column;gap:8px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(200,151,58,.2);border:1px solid rgba(200,151,58,.5);border-radius:4px;padding:4px 12px;font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.12em;color:var(--gold-l);text-transform:uppercase;width:fit-content}
+.hero-badge span{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.hero h1{font-family:'Inter',sans-serif;font-size:clamp(28px,4vw,48px);font-weight:800;color:#fff;line-height:1.05;letter-spacing:-.02em}
+.hero h1 em{font-style:normal;color:var(--gold-l)}
+.hero-meta{display:flex;gap:32px;margin-top:8px;font-family:'DM Mono',monospace;font-size:12px;color:rgba(200,223,245,.6)}
+.hero-meta b{color:var(--ice);font-size:16px;font-weight:500;font-family:'DM Sans',sans-serif;display:block}
+.tab-bar{display:flex;margin:0 -32px;border-bottom:2px solid rgba(11,31,58,.1);background:var(--card);position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(11,31,58,.06)}
+.tab-btn{padding:16px 32px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--muted);background:none;border:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:color .2s,border-color .2s,background .2s;display:flex;align-items:center;gap:8px}
+.tab-btn:hover{color:var(--navy);background:var(--ice-l)}
+.tab-btn.active{color:var(--navy);border-bottom-color:var(--sky)}
+.tab-btn.active.gold-tab{border-bottom-color:var(--gold)}
+.tab-btn.active.teal-tab{border-bottom-color:var(--teal)}
+.tab-badge{font-family:'DM Mono',monospace;font-size:10px;background:var(--ice-l);color:var(--sky);border-radius:10px;padding:1px 7px}
+.tab-btn.active .tab-badge{background:var(--sky);color:#fff}
+.tab-btn.active.gold-tab .tab-badge{background:var(--gold);color:#fff}
+.tab-btn.active.teal-tab .tab-badge{background:var(--teal);color:#fff}
+.tab-panel{display:none}.tab-panel.active{display:block}
+section{margin-top:56px}
+.sl{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--sky);margin-bottom:10px}
+.st{font-family:'Inter',sans-serif;font-size:clamp(20px,3vw,28px);font-weight:700;color:var(--navy);letter-spacing:-.02em;margin-bottom:8px}
+.sd{color:var(--muted);font-size:14px;max-width:620px;margin-bottom:28px;font-weight:300}
+.sr{width:40px;height:3px;background:linear-gradient(90deg,var(--gold),transparent);margin-bottom:24px;border-radius:2px}
+.kg{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.kc{background:var(--card);border-radius:12px;padding:20px;border:1px solid rgba(11,31,58,.08);box-shadow:0 1px 3px rgba(11,31,58,.06);position:relative;overflow:hidden;transition:transform .2s}
+.kc:hover{transform:translateY(-2px)}
+.kc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--sky),var(--ice))}
+.kc.gold::before{background:linear-gradient(90deg,var(--gold),var(--gold-l))}
+.ki{width:28px;height:28px;background:var(--ice-l);border-radius:7px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;font-size:14px}
+.kc.gold .ki{background:rgba(200,151,58,.1)}
+.kv{font-family:'Inter',sans-serif;font-size:26px;font-weight:800;color:var(--navy);letter-spacing:-.03em;line-height:1;margin-bottom:5px}
+.kl{font-size:12px;color:var(--muted);margin-bottom:3px}
+.ks{font-size:11px;color:var(--sky);font-family:'DM Mono',monospace}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.cc{background:var(--card);border-radius:14px;padding:24px;border:1px solid rgba(11,31,58,.07);box-shadow:0 2px 10px rgba(11,31,58,.04)}
+.cc.wide{grid-column:1/-1}
+.ct{font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:var(--navy);margin-bottom:3px}
+.csub{font-size:12px;color:var(--muted);margin-bottom:16px}
+.ch{position:relative}
+.dw{display:grid;grid-template-columns:180px 1fr;gap:20px;align-items:center}
+.li{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.ld{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.ll{font-size:12px}.lv{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{background:var(--navy)}
+thead th{padding:11px 13px;text-align:right;color:rgba(255,255,255,.85);font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;font-weight:500;white-space:nowrap}
+thead th:first-child{text-align:left}
+tbody tr{border-bottom:1px solid var(--ice-l);transition:background .15s}
+tbody tr:hover{background:var(--ice-l)}
+tbody tr.tot{background:var(--ice-l);font-weight:600}
+tbody tr.tot td{color:var(--navy);border-top:2px solid var(--ice)}
+td{padding:9px 13px;text-align:right}
+td:first-child{text-align:left;font-weight:500;color:var(--navy)}
+.cc-col{font-family:'DM Mono',monospace;color:var(--steel)}
+td.hl{color:var(--sky);font-weight:600}
+.spr{display:flex;gap:14px;flex-wrap:wrap}
+.spc{flex:1;min-width:150px;background:var(--ice-l);border-radius:10px;padding:12px 14px;border:1px solid rgba(11,31,58,.06)}
+.spl{font-size:10px;color:var(--muted);margin-bottom:3px;font-family:'DM Mono',monospace;letter-spacing:.06em}
+.spv{font-family:'Inter',sans-serif;font-size:18px;font-weight:700;color:var(--navy)}
+.spt{font-size:11px;margin-top:2px}
+.up{color:#22C55E}.dn{color:#EF4444}.neu{color:var(--muted)}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fc{background:var(--card);border-radius:10px;padding:18px 18px 18px 22px;border:1px solid rgba(11,31,58,.07);border-left:3px solid var(--sky);display:flex;gap:14px;align-items:flex-start;transition:border-color .2s}
+.fc:hover{border-left-color:var(--gold)}
+.fn{font-family:'Inter',sans-serif;font-size:24px;font-weight:800;color:var(--ice);line-height:1;flex-shrink:0;width:32px}
+.ft{font-size:13px;line-height:1.55;font-weight:300}.ft strong{font-weight:600;color:var(--navy)}
+/* DATA EXPLORER */
+.de-toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:var(--card);border-radius:12px;padding:18px 22px;border:1px solid rgba(11,31,58,.07);box-shadow:0 2px 8px rgba(11,31,58,.04);margin-bottom:12px}
+.de-f{display:flex;flex-direction:column;gap:4px}
+.de-f label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.de-f select{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--navy);background:var(--bg);border:1px solid rgba(11,31,58,.15);border-radius:6px;padding:7px 10px;outline:none;min-width:120px}
+.de-f select:focus{border-color:var(--teal)}
+.de-btn{padding:7px 16px;border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;border:none;cursor:pointer;align-self:flex-end;margin-top:auto}
+.de-btn.reset{background:var(--ice-l);color:var(--navy);border:1px solid rgba(11,31,58,.1)}
+.de-btn.reset:hover{background:var(--ice)}
+.de-pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;min-height:26px}
+.de-pill{font-family:'DM Mono',monospace;font-size:11px;background:var(--ice-l);color:var(--steel);border-radius:20px;padding:4px 12px;display:inline-flex;align-items:center;gap:5px}
+.de-pill b{color:var(--navy);font-size:13px}
+.de-tc{background:var(--card);border-radius:12px;border:1px solid rgba(11,31,58,.07);overflow:hidden;box-shadow:0 2px 8px rgba(11,31,58,.04)}
+.de-tc table{font-size:12px}
+.de-tc thead th{font-size:9px;padding:10px 12px;cursor:pointer;user-select:none;white-space:nowrap;transition:background .15s}
+.de-tc thead th:hover{background:rgba(59,130,196,.18)}
+.de-tc thead th.asc::after{content:" ▲";color:var(--gold-l);font-size:8px}
+.de-tc thead th.desc::after{content:" ▼";color:var(--gold-l);font-size:8px}
+.de-tc td{padding:8px 12px;font-size:12px}
+.de-tc td:first-child{text-align:left;font-family:'DM Mono',monospace;font-weight:500;color:var(--steel)}
+.de-empty{text-align:center;padding:48px;color:var(--muted)}
+.de-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.de-chart-box{background:var(--card);border-radius:12px;padding:18px;border:1px solid rgba(11,31,58,.07);box-shadow:0 2px 8px rgba(11,31,58,.04)}
+.de-chart-title{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px}
+.de-chart-sub{font-size:11px;color:var(--muted);margin-bottom:12px}
+@media(max-width:700px){.de-charts{grid-template-columns:1fr}}
+.de-pager{display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px}
+.de-pager-info{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)}
+.de-pager-btns{display:flex;gap:6px}
+.de-pb{background:var(--card);border:1px solid rgba(11,31,58,.12);border-radius:6px;padding:5px 14px;font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--navy)}
+.de-pb:hover{background:var(--ice-l)}
+.de-pb:disabled{opacity:.35;cursor:not-allowed}
+footer{margin-top:72px;border-top:1px solid rgba(11,31,58,.1);padding-top:28px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:14px}
+footer .fl{font-size:13px;color:var(--muted)}
+footer .fr{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-align:right}
+@media(max-width:900px){.kg{grid-template-columns:repeat(2,1fr)}.cg{grid-template-columns:1fr}.dw{grid-template-columns:1fr}.fg{grid-template-columns:1fr}.pw{padding:0 16px 60px}.tab-btn{padding:14px 16px;font-size:12px}}
+</style>
+</head>
+<body>
+
+<!-- ── DROP SCREEN ── -->
+<div id="drop-screen">
+  <div class="drop-box" id="drop-box" onclick="document.getElementById('file-input').click()">
+    <span class="drop-icon">📊</span>
+    <div class="drop-title">IHP Dashboard Loader</div>
+    <div class="drop-sub">Drop your updated Excel file here, or click to browse.<br>The dashboard will rebuild automatically from your data.</div>
+    <button class="drop-btn" onclick="event.stopPropagation();document.getElementById('file-input').click()">Choose Excel File</button>
+    <div class="drop-hint">Accepts .xlsx &nbsp;·&nbsp; Data must start on row 5 with Date in column A</div>
+    <div class="drop-error" id="drop-error"></div>
+  </div>
+  <input type="file" id="file-input" accept=".xlsx,.xls">
+</div>
+
+<!-- ── RELOAD BUTTON (shown after load) ── -->
+<button class="drop-reload" id="reload-btn" onclick="document.getElementById('file-input').click()">⟳ Load New File</button>
+<button class="drop-pdf" id="pdf-btn" onclick="downloadPDF()">⬇ Download PDF</button>
+
+<!-- ── DASHBOARD ── -->
+<div id="dashboard">
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="header"><img alt="KAUST Logo" src="data:image/jpeg;base64,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" style="height: 90px; margin-bottom: 10px; border-radius: 50%; border: 2px solid rgba(200,151,58,0.7); padding: 14px; background: rgba(255,255,255,0.95);"/>
+    <h1>IHP Lab Equipment <em>Installation Dashboard</em></h1>
+    <div class="hero-meta">
+      <div><b id="hm-months">—</b>months tracked</div>
+      <div><b id="hm-start">—</b>program start</div>
+      <div><b id="hm-end">—</b>latest data</div>
+      <div><b id="hm-installs">—</b>total installations</div>
+      <div><b id="hm-cost">—</b>total cost</div>
+    </div>
+  </div>
+</header>
+
+<div class="pw">
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="t1" onclick="switchTab('t1')">&#128296; Installations <span class="tab-badge" id="badge-t1">—</span></button>
+  <button class="tab-btn gold-tab" data-tab="t2" onclick="switchTab('t2')">&#128203; Assessments <span class="tab-badge" id="badge-t2">—</span></button>
+  <button class="tab-btn teal-tab" data-tab="t3" onclick="switchTab('t3')">&#128202; Data Explorer <span class="tab-badge" id="badge-t3">—</span></button>
+</div>
+
+<!-- TAB 1 -->
+<div id="t1" class="tab-panel active"><div class="print-tab-label" style="display:none">📐 Installations Report</div>
+<section>
+  <div class="sl">01 — Overview</div><div class="st">Program at a Glance</div><div class="sr"></div>
+  <div class="kg" id="kpi-t1a"></div>
+  <div class="kg" id="kpi-t1b"></div>
+</section>
+<section>
+  <div class="sl">02 — Charts</div><div class="st">Installation &amp; Cost Trends</div><div class="sr"></div>
+  <div class="cg">
+    <div class="cc wide"><div class="ct">Annual Installations &amp; Equipment Cost</div><div class="csub">Year-by-year volume and total equipment expenditure</div><div class="ch" style="height:280px"><canvas id="annualChart"></canvas></div></div>
+    <div class="cc"><div class="ct">Equipment Type Breakdown</div><div class="csub">Cumulative share by installation category</div><div class="dw"><div class="ch" style="height:180px"><canvas id="typeDonut"></canvas></div><div id="type-legend"></div></div></div>
+    <div class="cc"><div class="ct">Direct vs. 3rd Party Over Time</div><div class="csub">Annual breakdown of delivery method</div><div class="ch" style="height:200px"><canvas id="deliveryChart"></canvas></div></div>
+    <div class="cc wide"><div class="ct">Recent 12-Month Performance</div><div class="csub" id="recent-sub">Monthly installations, ICRs, and equipment cost</div><div class="ch" style="height:240px"><canvas id="recentChart"></canvas></div></div>
+  </div>
+</section>
+<section>
+  <div class="sl">03 — Annual Data</div><div class="st">Annual Performance Summary</div><div class="sr"></div>
+  <div class="cc" style="padding:0;overflow:hidden"><div class="tw"><table id="annual-table"><thead><tr><th style="text-align:left">Year</th><th>Installs</th><th>ICRs</th><th>Direct</th><th>3rd Party</th><th>Capital</th><th>Baseline</th><th>Existing</th><th>Caseworks</th><th>Total Cost</th></tr></thead><tbody id="annual-tbody"></tbody></table></div></div>
+</section>
+<section>
+  <div class="sl">04 — Recent Activity</div><div class="st">Recent 12-Month Detail</div><div class="sr"></div>
+  <div class="spr" style="margin-bottom:20px" id="sparks-t1"></div>
+  <div class="cc" style="padding:0;overflow:hidden"><div class="tw"><table id="recent-table"><thead><tr><th style="text-align:left">Month</th><th>Installs</th><th>ICRs</th><th>Direct</th><th>3rd Party</th><th>Capital</th><th>Baseline</th><th>Existing</th><th>Caseworks</th><th>Cost</th></tr></thead><tbody id="recent-tbody"></tbody></table></div></div>
+</section>
+<section>
+  <div class="sl">05 — Installs &amp; Assessments</div><div class="st">Total Installations vs. Assessments</div><div class="sd">Full program history — monthly total installations alongside ASEPC proposals and PO approvals.</div><div class="sr"></div>
+  <div class="cg">
+    <div class="cc wide"><div class="ct">Monthly Installations, ASEPC Proposals &amp; PO Approvals</div><div class="csub" id="installs-assess-sub">Full program history</div><div class="ch" style="height:340px"><canvas id="installsAssessChart"></canvas></div></div>
+  </div>
+
+  <div class="sl">06 — Key Findings</div><div class="st">Analysis</div><div class="sr"></div>
+  <div class="fg" id="findings-t1"></div>
+</section>
+<footer><div class="fl"><strong>IHP Lab Equipment Installation Dashboard</strong><br>Auto-generated from uploaded data file</div><div class="fr" id="footer-t1">—</div></footer>
+</div><!-- /t1 -->
+
+<!-- TAB 2 -->
+<div id="t2" class="tab-panel"><div class="print-section-break" style="display:none"></div><div class="print-tab-label" style="display:none">📋 Assessments Report</div>
+<section>
+  <div class="sl">01 — Assessment Overview</div><div class="st">Assessment Metrics at a Glance</div><div class="sr"></div>
+  <div class="kg" id="kpi-t2a"></div>
+  <div class="kg" id="kpi-t2b"></div>
+</section>
+<section>
+  <div class="sl">02 — Procurement Trends</div><div class="st">ASEPC Proposals &amp; PO Approvals Over Time</div><div class="sd">Annual activity from when formal assessment tracking was introduced.</div><div class="sr"></div>
+  <div class="cg"><div class="cc wide"><div class="ct">Procurement Pipeline: ASEPC Proposals · PO Approvals</div><div class="csub" id="proc-sub">Annual activity</div><div class="ch" style="height:280px"><canvas id="procChart"></canvas></div></div></div>
+</section>
+<section>
+  <div class="sl">03 — Annual Data</div><div class="st">Annual Assessment Summary</div><div class="sr"></div>
+  <div class="cc" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th style="text-align:left">Year</th><th>ASEPC Proposals</th><th>PO Approvals</th></tr></thead><tbody id="assess-tbody"></tbody></table></div></div>
+</section>
+<section>
+  <div class="sl">04 — Recent Monthly Detail</div><div class="st">Monthly Assessment Activity</div><div class="sr"></div>
+  <div class="spr" style="margin-bottom:20px" id="sparks-t2"></div>
+  <div class="cc" style="margin-bottom:20px"><div class="ct">Monthly ASEPC &amp; PO Activity</div><div class="csub" id="assess-month-sub">Recent 12 months</div><div class="ch" style="height:220px"><canvas id="assessMonthChart"></canvas></div></div>
+  <div class="cc" style="padding:0;overflow:hidden"><div class="tw"><table><thead><tr><th style="text-align:left">Month</th><th>ASEPC Proposals</th><th>PO Approvals</th></tr></thead><tbody id="assess-month-tbody"></tbody></table></div></div>
+</section>
+<footer><div class="fl"><strong>IHP Lab Equipment Installation Dashboard</strong><br>Auto-generated from uploaded data file</div><div class="fr" id="footer-t2">—</div></footer>
+</div><!-- /t2 -->
+
+<!-- TAB 3: DATA EXPLORER -->
+<div id="t3" class="tab-panel"><div class="print-section-break" style="display:none"></div><div class="print-tab-label" style="display:none">📊 Data Explorer Report</div>
+<section>
+  <div class="sl">All Records</div><div class="st">Data Explorer</div><div class="sd">Filter and sort all monthly records. Click any column header to sort.</div><div class="sr"></div>
+  <div class="de-toolbar">
+    <div class="de-f"><label>Year</label><select id="f-year" onchange="deApply()"><option value="">All Years</option></select></div>
+    <div class="de-f"><label>From</label><select id="f-from" onchange="deApply()"></select></div>
+    <div class="de-f"><label>To</label><select id="f-to" onchange="deApply()"></select></div>
+    <button class="de-btn reset" onclick="deReset()">✕ Reset</button>
+  </div>
+  <div class="de-pills" id="de-pills"></div>
+  <div class="de-charts">
+    <div class="de-chart-box">
+      <div class="de-chart-title">Installations</div>
+      <div class="de-chart-sub" id="de-inst-sub">Monthly breakdown</div>
+      <div style="position:relative;height:200px"><canvas id="deInstChart"></canvas></div>
+    </div>
+    <div class="de-chart-box">
+      <div class="de-chart-title">Assessments</div>
+      <div class="de-chart-sub" id="de-assess-sub">ASEPC Proposals &amp; PO Approvals</div>
+      <div style="position:relative;height:200px"><canvas id="deAssessChart"></canvas></div>
+    </div>
+  </div>
+  <div class="de-tc">
+    <table id="de-tbl">
+      <thead><tr>
+        <th onclick="deSort('date')">Month</th>
+        <th onclick="deSort('installs')">Installs</th>
+        <th onclick="deSort('icrs')">ICRs</th>
+        <th onclick="deSort('direct')">Direct</th>
+        <th onclick="deSort('third')">3rd Party</th>
+        <th onclick="deSort('cap_eq')">Capital Eq.</th>
+        <th onclick="deSort('base_eq')">Baseline Eq.</th>
+        <th onclick="deSort('exist_eq')">Existing Eq.</th>
+        <th onclick="deSort('cw')">Caseworks</th>
+        <th onclick="deSort('total_cost')">Total Cost</th>
+        <th onclick="deSort('asepc')">ASEPC</th>
+        <th onclick="deSort('po')">PO Approvals</th>
+      </tr></thead>
+      <tbody id="de-body"></tbody>
+    </table>
+  </div>
+  <div class="de-pager">
+    <span class="de-pager-info" id="de-info"></span>
+    <div class="de-pager-btns">
+      <button class="de-pb" id="de-prev" onclick="dePage(-1)">← Prev</button>
+      <button class="de-pb" id="de-next" onclick="dePage(1)">Next →</button>
+    </div>
+  </div>
+</section>
+<footer><div class="fl"><strong>IHP Lab Equipment Installation Dashboard</strong><br>Auto-generated from uploaded data file</div><div class="fr" id="footer-t3">—</div></footer>
+</div><!-- /t3 -->
+
+</div><!-- /pw -->
+</div><!-- /dashboard -->
+
+<script>
+var NAVY='#0B1F3A',STEEL='#1D4F8A',SKY='#3B82C4',ICE='#C8DFF5',GOLD='#C8973A',MUTED='#6B8099';
+var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+Chart.defaults.font.family="'DM Sans',sans-serif";
+Chart.defaults.color=MUTED;
+
+var chartInstances={};
+function destroyChart(id){if(chartInstances[id]){chartInstances[id].destroy();delete chartInstances[id];}}
+function makeChart(id,cfg){destroyChart(id);chartInstances[id]=new Chart(document.getElementById(id),cfg);return chartInstances[id];}
+
+/* ════════════════════════════════════════
+   FILE DROP / INPUT
+════════════════════════════════════════ */
+var dropScreen=document.getElementById('drop-screen');
+var dropBox=document.getElementById('drop-box');
+
+dropScreen.addEventListener('dragover',function(e){e.preventDefault();dropScreen.classList.add('drag-over');});
+dropScreen.addEventListener('dragleave',function(){dropScreen.classList.remove('drag-over');});
+dropScreen.addEventListener('drop',function(e){
+  e.preventDefault();dropScreen.classList.remove('drag-over');
+  var f=e.dataTransfer.files[0];
+  if(f)loadFile(f);
+});
+document.getElementById('file-input').addEventListener('change',function(e){
+  if(e.target.files[0])loadFile(e.target.files[0]);
+  this.value='';
+});
+
+function loadFile(file){
+  document.getElementById('drop-error').textContent='';
+  if(!/\.(xlsx|xls)$/i.test(file.name)){
+    document.getElementById('drop-error').textContent='Please upload an .xlsx or .xls file.';return;
+  }
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+      parseAndRender(raw,file.name);
+    }catch(err){
+      document.getElementById('drop-error').textContent='Error reading file: '+err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ════════════════════════════════════════
+   PARSE EXCEL DATA
+════════════════════════════════════════ */
+function parseAndRender(raw,filename){
+  // Find header row (row with "Date" in col 0)
+  var headerRow=-1;
+  for(var i=0;i<raw.length;i++){
+    if(raw[i][0]&&String(raw[i][0]).trim().toLowerCase()==='date'){headerRow=i;break;}
+  }
+  if(headerRow<0){document.getElementById('drop-error').textContent='Could not find header row (looking for "Date" column). Check sheet format.';return;}
+
+  var DATA=[];
+  for(var r=headerRow+1;r<raw.length;r++){
+    var row=raw[r];
+    if(!row[0])continue;
+    var d=row[0];
+    var dy,dm,dd;
+    // Always parse via serial number to avoid any timezone shifting
+    if(typeof d==='number' && d > 1){
+      var parsed=XLSX.SSF.parse_date_code(d);
+      if(!parsed||!parsed.y){continue;}
+      dy=parsed.y; dm=parsed.m; dd=parsed.d;
+    } else if(typeof d==='string' && d.trim()){
+      // Try parsing date string e.g. "2026-02-01" or "01/02/2026"
+      var tmp=new Date(d.trim());
+      if(isNaN(tmp.getTime()))continue;
+      dy=tmp.getFullYear(); dm=tmp.getMonth()+1; dd=tmp.getDate();
+    } else if(d instanceof Date){
+      if(isNaN(d.getTime()))continue;
+      dy=d.getFullYear(); dm=d.getMonth()+1; dd=d.getDate();
+    } else {
+      continue;
+    }
+    DATA.push({
+      date: dy+'-'+pad(dm)+'-'+pad(dd),
+      label: MONTHS[dm-1]+' '+dy,
+      year: dy,
+      month: dm,
+      installs: num(row[1]),icrs: num(row[2]),direct: num(row[3]),third: num(row[4]),
+      cap_eq: num(row[5]),base_eq: num(row[6]),exist_eq: num(row[7]),cw: num(row[8]),
+      cap_cost: num(row[9]),base_cost: num(row[10]),total_cost: num(row[11]),
+      asepc: num(row[12]),po: num(row[13])
+    });
+  }
+  DATA.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+  if(!DATA.length){document.getElementById('drop-error').textContent='No data rows found after the header. Check file format.';return;}
+
+  // Show dashboard, hide drop screen
+  dropScreen.style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  document.getElementById('reload-btn').style.display='block';
+  document.getElementById('pdf-btn').style.display='block';
+
+  buildDashboard(DATA,filename);
+}
+
+function num(v){return parseFloat(v)||0;}
+function pad(n){return n<10?'0'+n:String(n);}
+function fmtCost(v){return '$'+Math.round(v).toLocaleString();}
+function fmtCostM(v){return '$'+(v/1e6).toFixed(2)+'M';}
+function dash(v){return v?v:'—';}
+
+/* ════════════════════════════════════════
+   BUILD DASHBOARD
+════════════════════════════════════════ */
+function buildDashboard(DATA,filename){
+  // ── Aggregate by year ──
+  var years={};
+  DATA.forEach(function(r){
+    var y=r.year;
+    if(!years[y])years[y]={installs:0,icrs:0,direct:0,third:0,cap_eq:0,base_eq:0,exist_eq:0,cw:0,cap_cost:0,base_cost:0,total_cost:0,asepc:0,po:0};
+    var d=years[y];
+    d.installs+=r.installs;d.icrs+=r.icrs;d.direct+=r.direct;d.third+=r.third;
+    d.cap_eq+=r.cap_eq;d.base_eq+=r.base_eq;d.exist_eq+=r.exist_eq;d.cw+=r.cw;
+    d.cap_cost+=r.cap_cost;d.base_cost+=r.base_cost;d.total_cost+=r.total_cost;
+    d.asepc+=r.asepc;d.po+=r.po;
+  });
+  var sortedYears=Object.keys(years).map(Number).sort();
+
+  // ── Totals ──
+  var tot={installs:0,icrs:0,direct:0,third:0,cap_eq:0,base_eq:0,exist_eq:0,cw:0,cap_cost:0,base_cost:0,total_cost:0,asepc:0,po:0};
+  DATA.forEach(function(r){Object.keys(tot).forEach(function(k){tot[k]+=r[k];});});
+
+  // ── Recent 12 months ──
+  var recent12=DATA.slice(-12);
+
+  // ── Peak month ──
+  var peakI=DATA.reduce(function(a,b){return b.installs>a.installs?b:a;});
+  var peakC=DATA.reduce(function(a,b){return b.total_cost>a.total_cost?b:a;});
+  var peakASEPC=recent12.reduce(function(a,b){return b.asepc>a.asepc?b:a;});
+  var peakPO=recent12.reduce(function(a,b){return b.po>a.po?b:a;});
+
+  var startLabel=DATA[0].label;
+  var endLabel=DATA[DATA.length-1].label;
+  var numMonths=DATA.length;
+
+  // ── Hero ──
+  document.getElementById('hm-months').textContent=numMonths;
+  document.getElementById('hm-start').textContent=startLabel;
+  document.getElementById('hm-end').textContent=endLabel;
+  document.getElementById('hm-installs').textContent=tot.installs.toLocaleString();
+  document.getElementById('hm-cost').textContent='$'+(tot.total_cost/1e6).toFixed(1)+'M';
+
+  // ── Tab badges ──
+  document.getElementById('badge-t1').textContent=tot.installs.toLocaleString();
+  document.getElementById('badge-t2').textContent=(tot.asepc+tot.po).toLocaleString();
+  document.getElementById('badge-t3').textContent=DATA.length;
+
+  // ── Footer ──
+  var footerText='Source: '+filename+'<br>Generated: '+new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})+'<br>Developed by: gootte';
+  ['t1','t2','t3'].forEach(function(id){document.getElementById('footer-'+id).innerHTML=footerText;});
+
+  // ════ TAB 1 KPI CARDS ════
+  document.getElementById('kpi-t1a').innerHTML=
+    kc('📐',tot.installs.toLocaleString(),'Total Installations',startLabel+' – '+endLabel)+
+    kc('📋',tot.icrs.toLocaleString(),'Total ICRs','Installation & Commissioning Reports')+
+    kc('💰',fmtCostM(tot.total_cost),'Total Equipment Cost','Capital + Baseline combined','gold')+
+    kc('📅',numMonths,'Months of Operations',Math.floor(numMonths/12)+'.'+Math.round((numMonths%12)/12*10)+' years of tracking');
+  var pctDirect=(tot.direct/tot.installs*100).toFixed(1);
+  var pctThird=(tot.third/tot.installs*100).toFixed(1);
+  document.getElementById('kpi-t1b').innerHTML=
+    kc('👷',tot.direct.toLocaleString(),'Direct Installations',pctDirect+'% of total volume')+
+    kc('🤝',tot.third.toLocaleString(),'3rd Party Installations',pctThird+'% of total volume')+
+    kc('🏆',peakI.label,'Peak Install Month',peakI.installs+' installations','gold')+
+    kc('💸',fmtCostM(peakC.total_cost),'Peak Cost Month',peakC.label,'gold');
+
+  // ════ TAB 1 CHARTS ════
+  var yrLabels=sortedYears.map(function(y){
+    var first=sortedYears[0],last=sortedYears[sortedYears.length-1];
+    return y===first||y===last?y+'*':String(y);
+  });
+  makeChart('annualChart',{type:'bar',data:{labels:yrLabels,datasets:[
+    {label:'Installations',data:sortedYears.map(function(y){return years[y].installs;}),backgroundColor:SKY+'66',borderColor:SKY,borderWidth:1,borderRadius:4,yAxisID:'y',order:2},
+    {label:'Equipment Cost ($M)',data:sortedYears.map(function(y){return+(years[y].total_cost/1e6).toFixed(2);}),type:'line',borderColor:GOLD,backgroundColor:GOLD+'22',borderWidth:2.5,pointBackgroundColor:GOLD,pointRadius:4,tension:0.35,fill:true,yAxisID:'y2',order:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{boxWidth:12,padding:16,font:{size:12},generateLabels:function(chart){var defs=Chart.defaults.plugins.legend.labels.generateLabels(chart);defs.forEach(function(d){if(d.text==='Installations'){d.fillStyle=SKY+'AA';d.strokeStyle=SKY;d.lineDash=[];}if(d.text==='Equipment Cost ($M)'){d.fillStyle=GOLD;d.strokeStyle=GOLD;d.lineDash=[];}});return defs;}}},tooltip:{callbacks:{label:function(ctx){return ctx.datasetIndex===1?' Cost: $'+ctx.raw+'M':' Installs: '+ctx.raw;}}}},scales:{y:{position:'left',title:{display:true,text:'Installations',color:SKY,font:{size:11}},grid:{color:'#E8F2FC'},ticks:{font:{size:11}}},y2:{position:'right',title:{display:true,text:'Cost ($M)',color:GOLD,font:{size:11}},grid:{drawOnChartArea:false},ticks:{font:{size:11},callback:function(v){return '$'+v+'M';}}},x:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+  // Type donut
+  var tCap=tot.cap_eq,tBase=tot.base_eq,tExist=tot.exist_eq,tCW=tot.cw;
+  var tClass=tCap+tBase+tExist+tCW;
+  makeChart('typeDonut', { type: 'doughnut', data: { labels: ['Existing','Baseline','Capital','Caseworks'], datasets: [{ data: [tExist, tBase, tCap, tCW], backgroundColor: [SKY, STEEL, GOLD, ICE], borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '68%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { var p = (ctx.raw / tClass * 100).toFixed(1); return ' ' + ctx.label + ': ' + ctx.raw.toLocaleString() + ' (' + p + '%)'; } } } } } });
+  document.getElementById('type-legend').innerHTML=
+    leg(SKY,'Existing Equipment',tExist)+leg(STEEL,'Baseline Equipment',tBase)+
+    leg(GOLD,'Capital Equipment',tCap)+leg(ICE,'Caseworks',tCW)+
+    '<p style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic">*'+(tot.installs-tClass)+' unclassified in source data.</p>';
+
+  makeChart('deliveryChart',{type:'bar',data:{labels:sortedYears,datasets:[
+    {label:'Direct',data:sortedYears.map(function(y){return years[y].direct;}),backgroundColor:SKY+'BB',borderRadius:3,stack:'a'},
+    {label:'3rd Party',data:sortedYears.map(function(y){return years[y].third;}),backgroundColor:GOLD+'BB',borderRadius:3,stack:'a'}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},y:{stacked:true,grid:{color:'#E8F2FC'},ticks:{font:{size:10}}}}}});
+
+  document.getElementById('recent-sub').textContent='Monthly installations, ICRs, and equipment cost ('+recent12[0].label+' – '+recent12[recent12.length-1].label+')';
+  makeChart('recentChart',{type:'bar',data:{labels:recent12.map(function(r){return r.label.split(' ')[0];}),datasets:[
+    {label:'Installations',data:recent12.map(function(r){return r.installs;}),backgroundColor:SKY+'88',borderColor:SKY,borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
+    {label:'ICRs',data:recent12.map(function(r){return r.icrs;}),type:'line',borderColor:STEEL,backgroundColor:'transparent',borderWidth:2,pointBackgroundColor:STEEL,pointRadius:3,tension:0.35,yAxisID:'y',order:2},
+    {label:'Cost ($M)',data:recent12.map(function(r){return+(r.total_cost/1e6).toFixed(2);}),type:'line',borderColor:GOLD,backgroundColor:GOLD+'12',borderWidth:2,pointBackgroundColor:GOLD,pointRadius:3,tension:0.35,fill:true,yAxisID:'y2',order:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:{label:function(ctx){return ctx.datasetIndex===2?' Cost: $'+ctx.raw+'M':' '+ctx.dataset.label+': '+ctx.raw;}}}},scales:{y:{position:'left',grid:{color:'#E8F2FC'},ticks:{font:{size:11}}},y2:{position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:11},callback:function(v){return '$'+v+'M';}}},x:{grid:{display:false},ticks:{font:{size:11}}}}}});
+
+  // ════ ANNUAL TABLE ════
+  var tbody='';
+  sortedYears.forEach(function(y){
+    var d=years[y];
+    var isFirst=y===sortedYears[0], isLast=y===sortedYears[sortedYears.length-1];
+    var firstMon=DATA.filter(function(r){return r.year===y;})[0].month;
+    var lastMon=DATA.filter(function(r){return r.year===y;}).slice(-1)[0].month;
+    var yLabel=isFirst&&firstMon>1?y+' ('+startLabel.split(' ')[0]+'–Dec)':isLast&&lastMon<12?y+' (Jan–'+endLabel.split(' ')[0]+')':String(y);
+    tbody+='<tr><td>'+yLabel+'</td><td>'+d.installs+'</td><td>'+d.icrs+'</td><td>'+d.direct+'</td><td>'+d.third+'</td><td>'+d.cap_eq+'</td><td>'+d.base_eq+'</td><td>'+d.exist_eq+'</td><td>'+d.cw+'</td><td class="cc-col">'+fmtCost(d.total_cost)+'</td></tr>';
+  });
+  tbody+='<tr class="tot"><td>TOTAL</td><td>'+tot.installs+'</td><td>'+tot.icrs+'</td><td>'+tot.direct+'</td><td>'+tot.third+'</td><td>'+tot.cap_eq+'</td><td>'+tot.base_eq+'</td><td>'+tot.exist_eq+'</td><td>'+tot.cw+'</td><td class="cc-col">'+fmtCost(tot.total_cost)+'</td></tr>';
+  document.getElementById('annual-tbody').innerHTML=tbody;
+
+  // ════ RECENT SPARKLINES ════
+  var r12tot={installs:0,icrs:0,total_cost:0};
+  recent12.forEach(function(r){r12tot.installs+=r.installs;r12tot.icrs+=r.icrs;r12tot.total_cost+=r.total_cost;});
+  var peakRI=recent12.reduce(function(a,b){return b.installs>a.installs?b:a;});
+  var lightRI=recent12.reduce(function(a,b){return b.installs<a.installs?b:a;});
+  document.getElementById('sparks-t1').innerHTML=
+    spark('12-MO TOTAL INSTALLS',r12tot.installs,'neu','')+
+    spark('12-MO TOTAL COST',fmtCostM(r12tot.total_cost),'neu','')+
+    spark('PEAK MONTH (INSTALLS)',peakRI.label,'up','↑ '+peakRI.installs+' installations')+
+    spark('LIGHTEST MONTH',lightRI.label,'dn','↓ '+lightRI.installs+' installations');
+
+  // ════ RECENT TABLE ════
+  var rtbody=recent12.map(function(r){
+    return '<tr><td>'+r.label+'</td><td>'+r.installs+'</td><td>'+r.icrs+'</td><td>'+r.direct+'</td><td>'+r.third+'</td><td>'+r.cap_eq+'</td><td>'+r.base_eq+'</td><td>'+r.exist_eq+'</td><td>'+r.cw+'</td><td class="cc-col">'+fmtCost(r.total_cost)+'</td></tr>';
+  }).join('');
+  document.getElementById('recent-tbody').innerHTML=rtbody;
+
+  // ════ FINDINGS ════
+  var avgMonthly=Math.round(tot.installs/numMonths);
+  var peakYear=sortedYears.reduce(function(a,b){return years[b].installs>years[a].installs?b:a;});
+  var peakCapYear=sortedYears.reduce(function(a,b){return years[b].cap_eq>years[a].cap_eq?b:a;});
+  var latestYear=sortedYears[sortedYears.length-1];
+  var pctDirectLatest=years[latestYear].installs>0?Math.round(years[latestYear].direct/years[latestYear].installs*100):0;
+  // ── Installs & Assessments chart ──
+  document.getElementById('installs-assess-sub').textContent='Full program history: '+DATA[0].label+' – '+DATA[DATA.length-1].label;
+  makeChart('installsAssessChart',{type:'bar',data:{
+    labels:sortedYears,
+    datasets:[
+      {label:'Installations',data:sortedYears.map(function(y){return years[y].installs;}),backgroundColor:SKY+'66',borderColor:SKY,borderWidth:1,borderRadius:4,yAxisID:'y',order:3},
+      {label:'ASEPC Proposals',data:sortedYears.map(function(y){return years[y].asepc;}),type:'line',borderColor:GOLD,backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.3,yAxisID:'y2',order:2},
+      {label:'PO Approvals',data:sortedYears.map(function(y){return years[y].po;}),type:'line',borderColor:STEEL,backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointHoverRadius:6,tension:0.3,yAxisID:'y2',order:1}
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{position:'top',labels:{boxWidth:12,padding:16,font:{size:12}}},
+      tooltip:{callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.raw;}}}
+    },
+    scales:{
+      y:{position:'left',title:{display:true,text:'Installations',color:SKY,font:{size:11}},grid:{color:'#E8F2FC'},ticks:{font:{size:11}}},
+      y2:{position:'right',title:{display:true,text:'Assessments',color:STEEL,font:{size:11}},grid:{drawOnChartArea:false},ticks:{font:{size:11}}},
+      x:{grid:{display:false},ticks:{font:{size:11}}}
+    }
+  }});
+
+  document.getElementById('findings-t1').innerHTML=
+    find('01','The program averaged <strong>~'+avgMonthly+' installations per month</strong> across '+numMonths+' months, demonstrating sustained operational throughput.')+
+    find('02','<strong>'+peakYear+' was the peak year</strong> for installation volume at '+years[peakYear].installs.toLocaleString()+' units. Capital equipment acquisitions peaked in '+peakCapYear+' at '+years[peakCapYear].cap_eq+' units.')+
+    find('03','<strong>'+peakI.label+' recorded '+peakI.installs+' installations</strong> — the program high. It was also the costliest month at '+fmtCostM(peakI.total_cost)+'.')+
+    find('04','Direct installations in <strong>'+latestYear+' were '+pctDirectLatest+'%</strong> of total volume, with '+years[latestYear].installs.toLocaleString()+' installs at '+fmtCostM(years[latestYear].total_cost)+'.')+
+    find('05','<strong>ICR counts have exceeded physical installations</strong> in multiple recent years, indicating growing commissioning documentation per installation.')+
+    find('06','<strong>Caseworks</strong> have become a permanent installation category since '+sortedYears.filter(function(y){return years[y].cw>0;})[0]+', averaging '+Math.round(tot.cw/(sortedYears.filter(function(y){return years[y].cw>0;}).length))+' units/year.');
+
+  // ════ TAB 2 ════
+  document.getElementById('kpi-t2a').innerHTML=
+    kc('📄',tot.asepc.toLocaleString(),'Total ASEPC Proposals','Submitted for assessment','gold')+
+    kc('✅',tot.po.toLocaleString(),'Total PO Approvals','Purchase orders approved','gold')+
+    kc('📅',sortedYears.filter(function(y){return years[y].po>0;})[0]||'—','PO Tracking Start','Year PO approvals first recorded')+
+    (function(){var py=sortedYears.reduce(function(a,b){return years[b].asepc>years[a].asepc?b:a;});return kc('🏆',py,'Peak ASEPC Year',years[py].asepc+' proposals');}());
+  var peakPOYear=sortedYears.reduce(function(a,b){return years[b].po>years[a].po?b:a;});
+  document.getElementById('kpi-t2b').innerHTML=
+    kc('📈',years[sortedYears.reduce(function(a,b){return years[b].asepc>years[a].asepc?b:a;})].asepc,'Peak ASEPC Proposals',sortedYears.reduce(function(a,b){return years[b].asepc>years[a].asepc?b:a;})+' — highest annual total')+
+    kc('🏆',years[peakPOYear].po,'Peak PO Approvals',peakPOYear+' — highest annual total','gold')+
+    kc('📉',years[latestYear].asepc,''+latestYear+' ASEPC Proposals','Most recent full year')+
+    kc('✅',years[latestYear].po,''+latestYear+' PO Approvals','Most recent full year','gold');
+
+  var assessYears=sortedYears.filter(function(y){return years[y].asepc>0||years[y].po>0;});
+  document.getElementById('proc-sub').textContent='Annual activity '+assessYears[0]+'–'+assessYears[assessYears.length-1];
+  makeChart('procChart',{type:'line',data:{labels:assessYears.map(String),datasets:[
+    {label:'PO Approvals',data:assessYears.map(function(y){return years[y].po;}),borderColor:SKY,backgroundColor:SKY+'20',borderWidth:2.5,pointRadius:5,tension:0.3,fill:true},
+    {label:'ASEPC Proposals',data:assessYears.map(function(y){return years[y].asepc;}),borderColor:GOLD,backgroundColor:GOLD+'15',borderWidth:2,pointRadius:5,tension:0.3,borderDash:[5,3]}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:12}}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#E8F2FC'},ticks:{font:{size:11}}}}}});
+
+  var atbody=sortedYears.map(function(y){
+    var d=years[y];
+    var yLabel=y===sortedYears[0]?y+' (partial)':y===latestYear&&DATA[DATA.length-1].month<12?y+' (partial)':String(y);
+    return '<tr><td>'+yLabel+'</td><td>'+(d.asepc||'—')+'</td><td>'+(d.po||'—')+'</td></tr>';
+  }).join('')+'<tr class="tot"><td>TOTAL</td><td>'+tot.asepc+'</td><td>'+tot.po+'</td></tr>';
+  document.getElementById('assess-tbody').innerHTML=atbody;
+
+  var r12asepc=recent12.reduce(function(s,r){return s+r.asepc;},0);
+  var r12po=recent12.reduce(function(s,r){return s+r.po;},0);
+  document.getElementById('sparks-t2').innerHTML=
+    spark('12-MO ASEPC TOTAL',r12asepc,'neu',recent12[0].label+' – '+recent12[recent12.length-1].label)+
+    spark('12-MO PO APPROVALS',r12po,'neu',recent12[0].label+' – '+recent12[recent12.length-1].label)+
+    spark('PEAK ASEPC MONTH',peakASEPC.label,'up','↑ '+peakASEPC.asepc+' proposals')+
+    spark('PEAK PO MONTH',peakPO.label,'up','↑ '+peakPO.po+' approvals');
+
+  document.getElementById('assess-month-sub').textContent=recent12[0].label+' – '+recent12[recent12.length-1].label;
+  makeChart('assessMonthChart',{type:'bar',data:{labels:recent12.map(function(r){return r.label.split(' ')[0];}),datasets:[
+    {label:'ASEPC Proposals',data:recent12.map(function(r){return r.asepc;}),backgroundColor:GOLD+'99',borderColor:GOLD,borderWidth:1.5,borderRadius:4},
+    {label:'PO Approvals',data:recent12.map(function(r){return r.po;}),backgroundColor:SKY+'88',borderColor:SKY,borderWidth:1.5,borderRadius:4}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:12}}}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'#E8F2FC'},ticks:{font:{size:11}}}}}});
+
+  var amtbody=recent12.map(function(r){
+    return '<tr><td>'+r.label+'</td><td>'+(r.asepc||'—')+'</td><td>'+(r.po||'—')+'</td></tr>';
+  }).join('');
+  document.getElementById('assess-month-tbody').innerHTML=amtbody;
+
+  // ════ DATA EXPLORER INIT ════
+  DE_DATA_ALL=DATA;
+  buildDEFilters(DATA);
+  deReset();
+}
+
+/* ════════════════════════════════════════
+   HELPER BUILDERS
+════════════════════════════════════════ */
+function kc(icon,val,label,sub,type){
+  return '<div class="kc'+(type?' '+type:'')+'"><div class="ki">'+icon+'</div><div class="kv">'+val+'</div><div class="kl">'+label+'</div><div class="ks">'+sub+'</div></div>';
+}
+function spark(label,val,trend,sub){
+  return '<div class="spc"><div class="spl">'+label+'</div><div class="spv">'+val+'</div><div class="spt '+trend+'">'+sub+'</div></div>';
+}
+function leg(color,label,val){
+  return '<div class="li"><div class="ld" style="background:'+color+'"></div><span class="ll">'+label+'</span><span class="lv">'+val.toLocaleString()+'</span></div>';
+}
+function find(num,text){
+  return '<div class="fc"><div class="fn">'+num+'</div><div class="ft">'+text+'</div></div>';
+}
+
+/* ════════════════════════════════════════
+   TAB SWITCHING
+════════════════════════════════════════ */
+function switchTab(id){
+  document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+  document.querySelector('[data-tab="'+id+'"]').classList.add('active');
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+  // Resize charts that were built while their tab was hidden
+  setTimeout(function(){
+    ['procChart','assessMonthChart','annualChart','typeDonut','deliveryChart','recentChart','installsAssessChart','deInstChart','deAssessChart'].forEach(function(cid){
+      if(chartInstances[cid]) chartInstances[cid].resize();
+    });
+  }, 50);
+}
+
+/* ════════════════════════════════════════
+   PDF DOWNLOAD
+════════════════════════════════════════ */
+function downloadPDF(){
+  // Temporarily make all tab panels visible so their charts render correctly
+  var panels=document.querySelectorAll('.tab-panel');
+  var origDisplay=[];
+  panels.forEach(function(p,i){
+    origDisplay[i]=p.style.display;
+    p.style.display='block';
+  });
+  // Resize all charts now that canvases are visible
+  ['procChart','assessMonthChart','annualChart','typeDonut','deliveryChart','recentChart','installsAssessChart','deInstChart','deAssessChart'].forEach(function(cid){
+    if(chartInstances[cid]) chartInstances[cid].resize();
+  });
+  // Wait for charts to repaint, then print
+  setTimeout(function(){
+    window.print();
+    // Restore original visibility after print dialog closes
+    panels.forEach(function(p,i){ p.style.display=origDisplay[i]; });
+  }, 600);
+}
+
+/* ════════════════════════════════════════
+   DATA EXPLORER
+════════════════════════════════════════ */
+var DE_DATA_ALL=[];
+var deFiltered=[],deSortCol='date',deSortDir=1,deCurPage=1,dePageSize=20;
+
+function buildDEFilters(DATA){
+  var years=[...new Set(DATA.map(function(r){return r.year;}))].sort();
+  var fy=document.getElementById('f-year');
+  fy.innerHTML='<option value="">All Years</option>';
+  years.forEach(function(y){var o=document.createElement('option');o.value=y;o.textContent=y;fy.appendChild(o);});
+
+  var ff=document.getElementById('f-from');
+  var ft=document.getElementById('f-to');
+  ff.innerHTML='';ft.innerHTML='';
+  DATA.forEach(function(r){
+    var o1=document.createElement('option');o1.value=r.date;o1.textContent=r.label;ff.appendChild(o1);
+    var o2=document.createElement('option');o2.value=r.date;o2.textContent=r.label;ft.appendChild(o2);
+  });
+  ft.value=DATA[DATA.length-1].date;
+}
+
+function deApply(){
+  var yr=document.getElementById('f-year').value;
+  var from=document.getElementById('f-from').value;
+  var to=document.getElementById('f-to').value;
+  deFiltered=DE_DATA_ALL.filter(function(r){
+    if(yr&&r.year!==parseInt(yr))return false;
+    if(from&&r.date<from)return false;
+    if(to&&r.date>to)return false;
+    return true;
+  });
+  deFiltered.sort(function(a,b){var av=a[deSortCol],bv=b[deSortCol];return av<bv?-deSortDir:av>bv?deSortDir:0;});
+  deCurPage=1;deRender();
+}
+
+function deReset(){
+  document.getElementById('f-year').value='';
+  document.getElementById('f-from').value='';
+  if(DE_DATA_ALL.length)document.getElementById('f-to').value=DE_DATA_ALL[DE_DATA_ALL.length-1].date;
+  deSortCol='date';deSortDir=1;
+  document.querySelectorAll('#de-tbl thead th').forEach(function(th){th.className='';});
+  deApply();
+}
+
+function deSort(col){
+  deSortDir=deSortCol===col?-deSortDir:1;
+  deSortCol=col;
+  var cols=['date','installs','icrs','direct','third','cap_eq','base_eq','exist_eq','cw','total_cost','asepc','po'];
+  document.querySelectorAll('#de-tbl thead th').forEach(function(th,i){th.className=cols[i]===col?(deSortDir===1?'asc':'desc'):'';});
+  deApply();
+}
+
+function dePage(dir){
+  var max=Math.ceil(deFiltered.length/dePageSize)||1;
+  deCurPage=Math.max(1,Math.min(max,deCurPage+dir));
+  deRender();
+}
+
+function deRender(){
+  var start=(deCurPage-1)*dePageSize;
+  var slice=deFiltered.slice(start,start+dePageSize);
+  var max=Math.max(1,Math.ceil(deFiltered.length/dePageSize));
+  var totI=0,totICR=0,totD=0,tot3=0,totC=0,totA=0,totP=0,totCap=0,totBase=0,totExist=0,totCW=0;
+  deFiltered.forEach(function(r){totI+=r.installs;totICR+=r.icrs;totD+=r.direct;tot3+=r.third;totC+=r.total_cost;totA+=r.asepc;totP+=r.po;totCap+=r.cap_eq;totBase+=r.base_eq;totExist+=r.exist_eq;totCW+=r.cw;});
+  document.getElementById('de-pills').innerHTML=
+    '<div class="de-pill">Rows <b>'+deFiltered.length+'</b></div>'+
+    '<div class="de-pill">Total Installs <b>'+totI.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Total ICRs <b>'+totICR.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Direct <b>'+totD.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">3rd Party <b>'+tot3.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Total Cost <b>$'+(totC/1e6).toFixed(2)+'M</b></div>'+
+    '<div class="de-pill">ASEPC <b>'+totA+'</b></div>'+
+    '<div class="de-pill">PO Approvals <b>'+totP+'</b></div>'+
+    '<div class="de-pill">Capital Eq. <b>'+totCap.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Baseline Eq. <b>'+totBase.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Existing Eq. <b>'+totExist.toLocaleString()+'</b></div>'+
+    '<div class="de-pill">Caseworks <b>'+totCW.toLocaleString()+'</b></div>';
+  var body=document.getElementById('de-body');
+  if(!slice.length){
+    body.innerHTML='<tr><td colspan="12" class="de-empty">No records match the current filters.</td></tr>';
+  }else{
+    body.innerHTML=slice.map(function(r){
+      return '<tr><td>'+r.label+'</td>'+
+        ['installs','icrs','direct','third','cap_eq','base_eq','exist_eq','cw'].map(function(k){return '<td>'+(r[k]||'—')+'</td>';}).join('')+
+        '<td class="cc-col">'+(r.total_cost>0?fmtCost(r.total_cost):'—')+'</td>'+
+        '<td>'+(r.asepc||'—')+'</td><td>'+(r.po||'—')+'</td></tr>';
+    }).join('');
+  }
+  document.getElementById('de-info').textContent='Page '+deCurPage+' of '+max+' ('+deFiltered.length+' records)';
+  document.getElementById('de-prev').disabled=deCurPage<=1;
+  document.getElementById('de-next').disabled=deCurPage>=max;
+  deDrawCharts();
+}
+
+function deDrawCharts(){
+  var sorted=deFiltered.slice().sort(function(a,b){return a.date<b.date?-1:1;});
+  var labels=sorted.map(function(r){return r.label;});
+  var sub=sorted.length?sorted[0].label+(sorted.length>1?' – '+sorted[sorted.length-1].label:''):'No data';
+  document.getElementById('de-inst-sub').textContent=sub;
+  document.getElementById('de-assess-sub').textContent='ASEPC Proposals & PO Approvals · '+sub;
+
+  // Installations chart — stacked bars: Direct + 3rd Party, line: ICRs
+  makeChart('deInstChart',{type:'bar',data:{
+    labels:labels,
+    datasets:[
+      {label:'Direct',data:sorted.map(function(r){return r.direct;}),backgroundColor:SKY+'99',borderColor:SKY,borderWidth:1,borderRadius:0,categoryPercentage:1.0,barPercentage:0.9,clip:false,stack:'installs',order:3},
+      {label:'3rd Party',data:sorted.map(function(r){return r.third;}),backgroundColor:'#0D9488'+'99',borderColor:'#0D9488',borderWidth:1,borderRadius:2,categoryPercentage:1.0,barPercentage:0.9,clip:false,stack:'installs',order:2},
+      {label:'ICRs',data:sorted.map(function(r){return r.icrs;}),type:'line',borderColor:STEEL,backgroundColor:'transparent',borderWidth:2,pointRadius:labels.length>24?0:3,tension:0.3,clip:false,order:1}
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    layout:{padding:{right:8}},
+    plugins:{legend:{position:'top',labels:{boxWidth:10,padding:12,font:{size:11}}},tooltip:{callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.raw;}}}},
+    scales:{
+      y:{stacked:true,grid:{color:'#E8F2FC'},ticks:{font:{size:10}}},
+      x:{grid:{display:false},offset:true,ticks:{font:{size:9},maxRotation:45,autoSkip:true,autoSkipPadding:4}}
+    }
+  }});
+
+  // Assessments chart
+  makeChart('deAssessChart',{type:'bar',data:{
+    labels:labels,
+    datasets:[
+      {label:'ASEPC',data:sorted.map(function(r){return r.asepc;}),backgroundColor:GOLD+'88',borderColor:GOLD,borderWidth:1,borderRadius:2,categoryPercentage:1.0,barPercentage:0.9,clip:false,order:2},
+      {label:'PO Approvals',data:sorted.map(function(r){return r.po;}),type:'line',borderColor:STEEL,backgroundColor:'transparent',borderWidth:2,pointRadius:labels.length>24?0:3,tension:0.3,clip:false,order:1}
+    ]
+  },options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    layout:{padding:{right:8}},
+    plugins:{legend:{position:'top',labels:{boxWidth:10,padding:12,font:{size:11}}},tooltip:{callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.raw;}}}},
+    scales:{
+      y:{grid:{color:'#E8F2FC'},ticks:{font:{size:10}}},
+      x:{grid:{display:false},offset:true,ticks:{font:{size:9},maxRotation:45,autoSkip:true,autoSkipPadding:4}}
+    }
+  }});
+}
+</script>
+</body>
+</html>
